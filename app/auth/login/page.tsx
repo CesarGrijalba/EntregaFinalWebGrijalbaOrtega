@@ -4,13 +4,13 @@
 import type React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { login } from "@/lib/auth";
-import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Newspaper } from "lucide-react";
+import { toast } from "sonner";
 import Link from "next/link";
 
 export default function LoginPage() {
@@ -23,18 +23,31 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const user = await login(email, password);
-      toast.success(`¡Bienvenido, ${user.nombre}!`);
+      // 1. Iniciar sesión en Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password.trim(),
+      });
 
-      // ✅ Redirección según rol
-      if (user.rol === "editor") {
-        router.push("/dashboard");
-      } else if (user.rol === "reportero") {
-        router.push("/dashboard");
-      } else {
-        router.push("/dashboard"); // fallback
+      if (authError) throw authError;
+
+      // 2. Obtener el rol desde la tabla `users`
+      const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("rol")
+        .eq("id", authData.user.id)
+        .single();
+
+      if (profileError) {
+        console.error("Error al obtener el perfil:", profileError);
+        throw new Error("No se pudo cargar la información del usuario");
       }
+
+      // 3. Redirección inmediata al dashboard
+      toast.success("¡Inicio de sesión exitoso!");
+      router.push("/dashboard");
     } catch (error: any) {
+      console.error("Error en login:", error);
       toast.error(error.message || "Error al iniciar sesión");
     } finally {
       setLoading(false);

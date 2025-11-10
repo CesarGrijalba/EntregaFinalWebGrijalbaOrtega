@@ -8,7 +8,6 @@ export type AuthUser = {
   rol: 'reportero' | 'editor';
 };
 
-// lib/auth.ts
 export const login = async (email: string, password: string) => {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
@@ -28,9 +27,10 @@ export const login = async (email: string, password: string) => {
     id: user.id,
     email: user.email!,
     nombre: profile.nombre || email.split('@')[0],
-    rol: (profile.rol as any) || 'reportero', // ← ¡Este campo es clave!
+    rol: (profile.rol as any) || 'reportero',
   };
 };
+
 export const register = async (email: string, password: string, nombre: string, rol: 'reportero' | 'editor' = 'reportero') => {
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email: email.trim(),
@@ -40,7 +40,6 @@ export const register = async (email: string, password: string, nombre: string, 
   if (signUpError) throw signUpError;
   if (!signUpData.user) throw new Error('No se creó el usuario');
 
-  // Iniciar sesión inmediatamente
   const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
     email: email.trim(),
     password: password.trim(),
@@ -49,7 +48,6 @@ export const register = async (email: string, password: string, nombre: string, 
   if (signInError) throw signInError;
   if (!signInData.user) throw new Error('No se pudo iniciar sesión');
 
-  // Crear perfil en tabla users
   const { error: insertError } = await supabase
     .from('users')
     .insert({
@@ -57,9 +55,7 @@ export const register = async (email: string, password: string, nombre: string, 
       email: email.trim(),
       nombre: nombre || email.split('@')[0],
       rol,
-    })
-    .select()
-    .single();
+    });
 
   if (insertError) {
     console.error("Error al crear perfil:", insertError);

@@ -1,77 +1,104 @@
-export type NewsStatus = "Edición" | "Terminado" | "Publicado" | "Desactivado"
+// lib/news.ts
+import { supabase } from '@/lib/supabase';
 
-export interface News {
-  id: string
-  titulo: string
-  subtitulo: string
-  contenido: string
-  categoria: string
-  imagen: string
-  autor: string
-  autorId: string
-  fechaCreacion: string
-  fechaActualizacion: string
-  estado: NewsStatus
-}
+export type News = {
+  id: string;
+  titulo: string;
+  subtitulo: string;
+  contenido: string;
+  categoria: string;
+  imagen: string;
+  autor: string;
+  autorId: string;
+  estado: 'Edición' | 'Terminado' | 'Publicado' | 'Desactivado';
+  fechaCreacion: string;
+  fechaActualizacion: string;
+};
 
-const NEWS_KEY = "cms_news"
+export const createNews = async (data: Omit<News, 'id' | 'fechaCreacion' | 'fechaActualizacion' | 'autorId'>) => {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Usuario no autenticado');
 
-export function getNews(): News[] {
-  if (typeof window === "undefined") return []
-  const news = localStorage.getItem(NEWS_KEY)
-  return news ? JSON.parse(news) : []
-}
+  const { data: newNews, error } = await supabase
+    .from('news')
+    .insert([
+      {
+        ...data,
+        autorId: user.id,
+        autor: data.autor,
+        fechaCreacion: new Date().toISOString(),
+        fechaActualizacion: new Date().toISOString(),
+      },
+    ])
+    .select()
+    .single();
 
-export function getNewsByAuthor(autorId: string): News[] {
-  return getNews().filter((n) => n.autorId === autorId)
-}
+  if (error) throw error;
+  return newNews as News;
+};
 
-export function getPublishedNews(): News[] {
-  return getNews().filter((n) => n.estado === "Publicado")
-}
+export const getPublishedNews = async (): Promise<News[]> => {
+  const { data, error } = await supabase
+    .from('news')
+    .select('*')
+    .eq('estado', 'Publicado')
+    .order('fechaCreacion', { ascending: false });
 
-export function getNewsById(id: string): News | null {
-  return getNews().find((n) => n.id === id) || null
-}
+  if (error) throw error;
+  return data || [];
+};
 
-export function createNews(news: Omit<News, "id" | "fechaCreacion" | "fechaActualizacion">): News {
-  const allNews = getNews()
-  const newNews: News = {
-    ...news,
-    id: Date.now().toString(),
-    fechaCreacion: new Date().toISOString(),
-    fechaActualizacion: new Date().toISOString(),
+export const getNewsByAuthor = async (authorId: string): Promise<News[]> => {
+  const { data, error } = await supabase
+    .from('news')
+    .select('*')
+    .eq('autorId', authorId)
+    .order('fechaCreacion', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+};
+
+export const getNews = async (): Promise<News[]> => {
+  const { data, error } = await supabase
+    .from('news')
+    .select('*')
+    .order('fechaCreacion', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+};
+
+export const getNewsById = async (id: string): Promise<News | null> => {
+  const { data, error } = await supabase
+    .from('news')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
   }
+  return data as News;
+};
 
-  allNews.push(newNews)
-  localStorage.setItem(NEWS_KEY, JSON.stringify(allNews))
+export const updateNews = async (id: string, updates: Partial<News>): Promise<News> => {
+  const { data, error } = await supabase
+    .from('news')
+    .update({
+      ...updates,
+      fechaActualizacion: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single();
 
-  return newNews
-}
+  if (error) throw error;
+  return data as News;
+};
 
-export function updateNews(id: string, updates: Partial<News>): News | null {
-  const allNews = getNews()
-  const index = allNews.findIndex((n) => n.id === id)
-
-  if (index === -1) return null
-
-  allNews[index] = {
-    ...allNews[index],
-    ...updates,
-    fechaActualizacion: new Date().toISOString(),
-  }
-
-  localStorage.setItem(NEWS_KEY, JSON.stringify(allNews))
-
-  return allNews[index]
-}
-
-export function deleteNews(id: string): boolean {
-  const allNews = getNews()
-  const filtered = allNews.filter((n) => n.id !== id)
-
-  if (filtered.length === allNews.length) return false
-
-  localStorage.setItem(NEWS_KEY, JSON.stringify(filtered))
-  return true
-}
+export const deleteNews = async (id: string): Promise<void> => {
+  const { error } = await supabase.from('news').delete().eq('id', id);
+  if (error) throw error;
+};

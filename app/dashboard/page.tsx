@@ -16,21 +16,36 @@ import Link from "next/link";
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading, setUser } = useAuth();
-  const [news, setNews] = useState<any[]>([]);
+  const [news, setNews] = useState<any[]>([]); // Siempre array
+  const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return;
+
+    if (!user) {
       router.push("/auth/login");
       return;
     }
 
-    if (user) {
-      if (user.rol === "reportero") {
-        setNews(getNewsByAuthor(user.id));
-      } else {
-        setNews(getNews());
+    const loadNews = async () => {
+      try {
+        if (user.rol === "reportero") {
+          const data = await getNewsByAuthor(user.id);
+          setNews(data);
+        } else {
+          const data = await getNews();
+          setNews(data);
+        }
+      } catch (error) {
+        console.error("Error al cargar noticias:", error);
+        toast.error("Error al cargar noticias");
+        setNews([]); // fallback seguro
+      } finally {
+        setDataLoading(false);
       }
-    }
+    };
+
+    loadNews();
   }, [user, loading, router]);
 
   const handleLogout = () => {
@@ -39,19 +54,24 @@ export default function DashboardPage() {
     router.push("/");
   };
 
-  const handleStatusChange = (id: string, newStatus: string) => {
-    const updated = updateNews(id, { estado: newStatus });
-    if (updated) {
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    try {
+      const updated = await updateNews(id, { estado: newStatus });
       setNews((prev) => prev.map((n) => (n.id === id ? updated : n)));
       toast.success("Estado actualizado");
+    } catch (error) {
+      toast.error("Error al actualizar estado");
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm("¿Estás seguro de eliminar esta noticia?")) {
-      if (deleteNews(id)) {
+      try {
+        await deleteNews(id);
         setNews((prev) => prev.filter((n) => n.id !== id));
         toast.success("Noticia eliminada");
+      } catch (error) {
+        toast.error("Error al eliminar noticia");
       }
     }
   };
@@ -66,7 +86,7 @@ export default function DashboardPage() {
     return <Badge variant={variants[status]}>{status}</Badge>;
   };
 
-  if (loading) {
+  if (loading || dataLoading) {
     return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
   }
 
