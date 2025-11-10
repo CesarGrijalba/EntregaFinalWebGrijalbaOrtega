@@ -45,7 +45,7 @@ export default function LoginPage() {
 
       // 3. Redirección inmediata al dashboard
       toast.success("¡Inicio de sesión exitoso!");
-      router.push("/dashboard");
+      router.push("/dashboard/news");
     } catch (error: any) {
       console.error("Error en login:", error);
       toast.error(error.message || "Error al iniciar sesión");

@@ -1,170 +1,185 @@
-"use client"
+"use client";
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/components/auth-provider"
-import { createNews } from "@/lib/news"
-import { getSections } from "@/lib/sections"
-import { uploadImage } from "@/lib/storage"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft } from "lucide-react"
-import { toast } from "sonner"
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { getCurrentUser } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 export default function NewNewsPage() {
-  const router = useRouter()
-  const { user, loading } = useAuth()
-  const [sections, setSections] = useState<string[]>([])
-  const [titulo, setTitulo] = useState("")
-  const [subtitulo, setSubtitulo] = useState("")
-  const [contenido, setContenido] = useState("")
-  const [categoria, setCategoria] = useState("")
-  const [imagen, setImagen] = useState("")
-  const [uploading, setUploading] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const router = useRouter();
 
+  const [titulo, setTitulo] = useState("");
+  const [subtitulo, setSubtitulo] = useState("");
+  const [contenido, setContenido] = useState("");
+  const [categoria, setCategoria] = useState("");
+  const [imagen, setImagen] = useState("");
+  const [autor, setAutor] = useState<string>("");
+  const [autorId, setAutorId] = useState<string>("");
+  const [sections, setSections] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // 🔹 Cargar usuario actual y secciones disponibles
   useEffect(() => {
-    if (!loading && !user) {
-      router.push("/auth/login")
-      return
-    }
+    const fetchData = async () => {
+      const user = await getCurrentUser();
 
-    const sectionsList = getSections()
-    setSections(sectionsList.map((s) => s.nombre))
-    if (sectionsList.length > 0) {
-      setCategoria(sectionsList[0].nombre)
-    }
-  }, [user, loading, router])
+      if (!user) {
+        toast.error("No hay sesión activa.");
+        router.push("/auth/login");
+        return;
+      }
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+      // Guardar ID de usuario en memoria
+      setAutorId(user.id);
 
-    setUploading(true)
-    try {
-      const url = await uploadImage(file)
-      setImagen(url)
-      toast.success("Imagen cargada")
-    } catch (error) {
-      toast.error("Error al cargar imagen")
-    }
-    setUploading(false)
-  }
+      // Obtener nombre desde tabla users
+      const { data: userProfile, error: userError } = await supabase
+        .from("users")
+        .select("nombre")
+        .eq("id", user.id)
+        .single();
 
+      if (userError) {
+        console.error("Error al obtener usuario:", userError);
+        toast.error("No se pudo cargar el perfil del autor.");
+      } else if (userProfile) {
+        setAutor(userProfile.nombre);
+      }
+
+      // Obtener secciones
+      const { data: sectionsData, error: sectionsError } = await supabase
+        .from("sections")
+        .select("id, nombre")
+        .order("nombre", { ascending: true });
+
+      if (sectionsError) {
+        console.error("Error cargando secciones:", sectionsError);
+      } else {
+        setSections(sectionsData || []);
+      }
+    };
+
+    fetchData();
+  }, [router]);
+
+  // 🔹 Guardar noticia
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!user) return
+    e.preventDefault();
+    setLoading(true);
 
-    setSaving(true)
-    try {
-      createNews({
-        titulo,
-        subtitulo,
-        contenido,
-        categoria,
-        imagen,
-        autor: user.nombre,
-        autorId: user.id,
-        estado: "Edición",
-      })
-      toast.success("Noticia creada")
-      router.push("/dashboard")
-    } catch (error) {
-      toast.error("Error al crear noticia")
+    if (!titulo || !contenido || !categoria) {
+      toast.warning("Por favor completa los campos obligatorios.");
+      setLoading(false);
+      return;
     }
-    setSaving(false)
-  }
 
-  if (loading || !user) {
-    return null
-  }
+    try {
+      const { error } = await supabase.from("news").insert([
+        {
+          titulo,
+          subtitulo,
+          contenido,
+          categoria,
+          imagen,
+          autor,
+          autor_id: autorId,
+          estado: "Edición",
+          fechacreacion: new Date().toISOString(),
+          fecha_actualizacion: new Date().toISOString(),
+        },
+      ]);
+
+      if (error) {
+        console.error("Error al crear noticia:", error);
+        toast.error("❌ Error al guardar la noticia");
+      } else {
+        toast.success("✅ Noticia creada correctamente");
+        router.push("/dashboard/news");
+      }
+    } catch (err) {
+      console.error("Error inesperado:", err);
+      toast.error("Error inesperado al crear la noticia");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4">
-          <Button variant="ghost" onClick={() => router.push("/dashboard")}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Volver al Dashboard
-          </Button>
+    <div className="max-w-3xl mx-auto p-8 space-y-6">
+      <h1 className="text-3xl font-bold text-foreground mb-4">
+        📰 Crear nueva noticia
+      </h1>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <Label>Título *</Label>
+          <Input
+            value={titulo}
+            onChange={(e) => setTitulo(e.target.value)}
+            placeholder="Título principal de la noticia"
+          />
         </div>
-      </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-3xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>Nueva Noticia</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="titulo">Título *</Label>
-                <Input id="titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} required />
-              </div>
+        <div>
+          <Label>Subtítulo</Label>
+          <Input
+            value={subtitulo}
+            onChange={(e) => setSubtitulo(e.target.value)}
+            placeholder="Subtítulo o resumen breve"
+          />
+        </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="subtitulo">Subtítulo / Bajante *</Label>
-                <Input id="subtitulo" value={subtitulo} onChange={(e) => setSubtitulo(e.target.value)} required />
-              </div>
+        <div>
+          <Label>Contenido *</Label>
+          <Textarea
+            value={contenido}
+            onChange={(e) => setContenido(e.target.value)}
+            placeholder="Escribe el cuerpo completo de la noticia"
+            className="min-h-[180px]"
+          />
+        </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="categoria">Categoría *</Label>
-                <Select value={categoria} onValueChange={setCategoria}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sections.map((section) => (
-                      <SelectItem key={section} value={section}>
-                        {section}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        <div>
+          <Label>Categoría *</Label>
+          <select
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
+            className="w-full border rounded-md p-2"
+          >
+            <option value="">Seleccionar categoría</option>
+            {sections.map((section) => (
+              <option key={section.id} value={section.nombre}>
+                {section.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="contenido">Contenido *</Label>
-                <Textarea
-                  id="contenido"
-                  value={contenido}
-                  onChange={(e) => setContenido(e.target.value)}
-                  rows={10}
-                  required
-                />
-              </div>
+        <div>
+          <Label>Imagen (URL)</Label>
+          <Input
+            value={imagen}
+            onChange={(e) => setImagen(e.target.value)}
+            placeholder="https://ejemplo.com/imagen.jpg"
+          />
+        </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="imagen">Imagen</Label>
-                <div className="flex gap-2">
-                  <Input id="imagen" type="file" accept="image/*" onChange={handleImageUpload} disabled={uploading} />
-                  {uploading && <span className="text-sm text-muted-foreground">Subiendo...</span>}
-                </div>
-                {imagen && (
-                  <div className="mt-2">
-                    <img src={imagen || "/placeholder.svg"} alt="Preview" className="max-w-xs rounded-lg" />
-                  </div>
-                )}
-              </div>
+        <div className="bg-muted rounded-md p-3 text-sm text-muted-foreground">
+          Autor:{" "}
+          <span className="font-semibold text-foreground">
+            {autor || "Cargando..."}
+          </span>
+        </div>
 
-              <div className="flex gap-2">
-                <Button type="submit" disabled={saving}>
-                  {saving ? "Guardando..." : "Crear Noticia"}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => router.push("/dashboard")}>
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </main>
+        <Button type="submit" disabled={loading}>
+          {loading ? "Guardando..." : "Guardar noticia"}
+        </Button>
+      </form>
     </div>
-  )
+  );
 }

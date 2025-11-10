@@ -30,7 +30,7 @@ export default function RegisterPage() {
     try {
       await register(email, password, nombre, rol);
       toast.success("Registro exitoso");
-      router.push("/dashboard"); // Redirige manualmente
+      router.push("/dashboard/news"); // Redirige manualmente
     } catch (error: any) {
       toast.error(error.message || "Error al registrarse");
     } finally {
@@ -40,7 +40,7 @@ export default function RegisterPage() {
 
   // Redirección automática si ya hay sesión
   if (user) {
-    router.push("/dashboard");
+    router.push("/dashboard/news");
     return null;
   }
 

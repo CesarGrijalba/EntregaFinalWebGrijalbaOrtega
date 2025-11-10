@@ -1,93 +1,110 @@
-// lib/auth.ts
-import { supabase } from '@/lib/supabase';
+import { supabase } from "./supabase";
 
-export type AuthUser = {
-  id: string;
-  nombre: string;
-  email: string;
-  rol: 'reportero' | 'editor';
-};
-
-export const login = async (email: string, password: string) => {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw error;
-
-  const user = data.user;
-  const { data: profile } = await supabase
-    .from('users')
-    .select('nombre, rol')
-    .eq('id', user.id)
-    .single();
-
-  if (!profile) {
-    throw new Error('Perfil de usuario no encontrado');
-  }
-
-  return {
-    id: user.id,
-    email: user.email!,
-    nombre: profile.nombre || email.split('@')[0],
-    rol: (profile.rol as any) || 'reportero',
-  };
-};
-
-export const register = async (email: string, password: string, nombre: string, rol: 'reportero' | 'editor' = 'reportero') => {
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-    email: email.trim(),
-    password: password.trim(),
+/**
+ * 🔹 Registra un nuevo usuario y lo inserta en la tabla "users".
+ */
+export async function register(
+  email: string,
+  password: string,
+  nombre: string,
+  rol: string = "reportero"
+) {
+  // Crear el usuario en el sistema de autenticación
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
   });
 
-  if (signUpError) throw signUpError;
-  if (!signUpData.user) throw new Error('No se creó el usuario');
-
-  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-    email: email.trim(),
-    password: password.trim(),
-  });
-
-  if (signInError) throw signInError;
-  if (!signInData.user) throw new Error('No se pudo iniciar sesión');
-
-  const { error: insertError } = await supabase
-    .from('users')
-    .insert({
-      id: signInData.user.id,
-      email: email.trim(),
-      nombre: nombre || email.split('@')[0],
-      rol,
-    });
-
-  if (insertError) {
-    console.error("Error al crear perfil:", insertError);
-    throw new Error("Error al crear el perfil del usuario");
+  if (error) {
+    console.error("❌ Error al registrar usuario:", error.message);
+    throw error;
   }
 
-  return {
-    id: signInData.user.id,
-    email: email.trim(),
-    nombre: nombre || email.split('@')[0],
-    rol,
-  };
-};
+  // Si el usuario se creó correctamente, insertarlo en la tabla "users"
+  if (data.user) {
+    const { error: userError } = await supabase.from("users").insert([
+      {
+        id: data.user.id,
+        email,
+        nombre,
+        rol,
+      },
+    ]);
 
-export const logout = async () => {
-  await supabase.auth.signOut();
-};
+    if (userError) {
+      console.error("❌ Error al insertar usuario en tabla users:", userError.message);
+      throw userError;
+    }
+  }
 
-export const getCurrentUser = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  return data.user;
+}
 
-  const { data: profile } = await supabase
-    .from('users')
-    .select('nombre, rol')
-    .eq('id', user.id)
+/**
+ * 🔹 Inicia sesión con email y contraseña.
+ */
+export async function login(email: string, password: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    console.error("❌ Error al iniciar sesión:", error.message);
+    throw error;
+  }
+
+  return data.user;
+}
+
+/**
+ * 🔹 Cierra la sesión actual.
+ */
+export async function logout() {
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    console.error("❌ Error al cerrar sesión:", error.message);
+    throw error;
+  }
+}
+
+/**
+ * 🔹 Obtiene el usuario autenticado actual (si existe sesión).
+ */
+export async function getCurrentUser() {
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error) {
+      console.error("❌ Error al obtener el usuario actual:", error.message);
+      return null;
+    }
+
+    return user;
+  } catch (err: any) {
+    console.error("❌ Error inesperado al obtener el usuario:", err.message);
+    return null;
+  }
+}
+
+/**
+ * 🔹 Retorna el perfil completo desde la tabla "users" según el ID del usuario autenticado.
+ * (opcional pero útil si guardas nombre y rol aparte en la DB)
+ */
+export async function getUserProfile(userId: string) {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, nombre, email, rol")
+    .eq("id", userId)
     .single();
 
-  return {
-    id: user.id,
-    email: user.email!,
-    nombre: profile?.nombre || user.email!.split('@')[0],
-    rol: (profile?.rol as any) || 'reportero',
-  };
-};
+  if (error) {
+    console.error("❌ Error al obtener perfil del usuario:", error.message);
+    return null;
+  }
+
+  return data;
+}

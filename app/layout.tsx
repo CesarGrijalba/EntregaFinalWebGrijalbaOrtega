@@ -6,7 +6,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-// Cargar Geist Sans
+// 💎 Fuentes modernas (Geist + JetBrains Mono)
 const geistSans = localFont({
   src: [
     {
@@ -29,7 +29,6 @@ const geistSans = localFont({
   display: "swap",
 });
 
-// Cargar Geist Mono
 const geistMono = localFont({
   src: [
     {
@@ -46,26 +45,63 @@ const geistMono = localFont({
   variable: "--font-geist-mono",
   display: "swap",
 });
+
+// 🧠 Metadatos globales
 export const metadata: Metadata = {
-  title: "CMS Noticias Corporativas",
-  description: "Sistema de gestión de contenidos para noticias corporativas",
-  generator: "v0.app",
+  title: "QHuboCaq",
+  description:
+    "Portal de noticias locales y tecnológicas de Q'hubo Ibagué y el Caquetá. Un espacio de innovación periodística y contenido regional.",
+  icons: {
+    icon: "https://www.qhuboibague.com/wp-content/uploads/2021/10/cropped-Logo_Q_hubo.png",
+  },
+  themeColor: "#FFD100",
+  generator: "Next.js + Supabase + Vercel",
 };
+
+// 🌈 Fondo dinámico tecnológico
+const BackgroundEffect = () => (
+  <div className="fixed inset-0 -z-10 bg-gradient-to-br from-yellow-100 via-white to-yellow-50 animate-gradient-x opacity-70"></div>
+);
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="es">
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+      <head>
+        <link
+          rel="icon"
+          href="https://www.qhuboibague.com/wp-content/uploads/2021/10/cropped-Logo_Q_hubo.png"
+          type="image/png"
+        />
+        <title>QHuboCaq</title>
+      </head>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased relative overflow-x-hidden text-foreground`}
+      >
+        <BackgroundEffect />
+
         <AuthProvider>
           {children}
           <Toaster />
         </AuthProvider>
+
+        {/* 🔹 Footer institucional */}
+        <footer className="border-t bg-gradient-to-r from-yellow-50 via-yellow-100/60 to-yellow-50 py-4 mt-12 text-center text-sm text-muted-foreground backdrop-blur-md">
+          <p>
+            © 2025 <strong>QHuboCaq</strong> · Desarrollado por{" "}
+            <span className="text-primary font-semibold">
+              César Grijalba & Ana Sofía Pérez
+            </span>{" "}
+            · Tecnología Supabase + Next.js
+          </p>
+        </footer>
+
         <Analytics />
       </body>
     </html>
   );
 }
+``
